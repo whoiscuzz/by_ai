@@ -1,8 +1,11 @@
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import pypdf
-import os
-from openai import OpenAI
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -13,54 +16,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Настройка клиента Perplexity
 client = OpenAI(
-    api_key="YOUR_PERPLEXITY_KEY",
+    api_key=os.getenv("PERPLEXITY_API_KEY"),
     base_url="https://api.perplexity.ai"
 )
 
 def get_text_from_pdf():
     if not os.path.exists("./books"):
-        return "Папка books не найдена"
+        os.makedirs("./books")
+        return "Папка books была пуста, я её создал."
 
     pdf_files = [f for f in os.listdir("./books") if f.endswith(".pdf")]
     if not pdf_files:
-        return "Учебники в формате PDF не найдены"
+        return "В папке books нет PDF файлов."
 
     try:
         reader = pypdf.PdfReader(os.path.join("./books", pdf_files[0]))
-        # Извлекаем текст с первых 3 страниц, чтобы ИИ было на что опираться
         text = ""
         for i in range(min(3, len(reader.pages))):
             text += reader.pages[i].extract_text()
         return text[:3000]
-    except:
-        return "Не удалось прочитать PDF"
+    except Exception as e:
+        return f"Ошибка чтения PDF: {e}"
 
 @app.post("/solve")
 async def solve(request: Request):
     form_data = await request.form()
     task_text = form_data.get("task", "")
+    print(f"--- Получено задание: {task_text} ---")
 
-    book_context = get_text_from_pdf()
+    context = get_text_from_pdf()
+    print("--- Контекст из учебника извлечен ---")
 
-    # Формируем запрос к ИИ
-    response = client.chat.completions.create(
-        model="llama-3.1-sonar-small-128k-online",
-        messages=[
-            {
-                "role": "system",
-                "content": f"Ты — помощник по образованию РБ. Используй этот текст из учебника для решения: {book_context}"
-            },
-            {
-                "role": "user",
-                "content": f"Реши задачу, оформляя её строго по правилам из учебника: {task_text}"
-            }
-        ]
-    )
-
-    ai_answer = response.choices[0].message.content
-    return {"result": ai_answer}
+    try:
+        print("--- Запрос к Perplexity... ---")
+        response = client.chat.completions.create(
+            model="llama-3.1-sonar-small-128k-online",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"Ты — эксперт по школьной программе РБ. Используй текст учебника: {context}"
+                },
+                {
+                    "role": "user",
+                    "content": task_text
+                }
+            ]
+        )
+        ai_answer = response.choices[0].message.content
+        print("--- Ответ от ИИ получен успешно! ---")
+        return {"result": ai_answer}
+    except Exception as e:
+        print(f"!!! ОШИБКА API: {e}")
+        return {"result": f"Ошибка нейросети: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
