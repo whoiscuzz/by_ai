@@ -66,7 +66,6 @@ def load_library():
 load_library()
 
 def find_info_in_subject(query, subject):
-    # Фильтруем данные: берем только те, что относятся к выбранному предмету
     target_data = [c for c in library_chunks if c['subject'] == subject]
 
     if not target_data:
