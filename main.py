@@ -30,6 +30,11 @@ def load_library():
     library_chunks = []
     books_dir = "./books"
 
+    valid_subjects = [
+        'algebra', 'english', 'bel_lit', 'bel_mova', 'bio',
+        'phys', 'geom', 'geo', 'soc', 'rus_yaz', 'rus_lit', 'hist'
+    ]
+
     if not os.path.exists(books_dir):
         os.makedirs(books_dir)
         return
@@ -38,10 +43,13 @@ def load_library():
     for filename in os.listdir(books_dir):
         if filename.endswith(".pdf"):
             try:
-                # Определяем предмет по началу имени файла (например, "algebra_8.pdf" -> "algebra")
-                subject_tag = filename.split('_')[0].lower()
-                reader = pypdf.PdfReader(os.path.join(books_dir, filename))
+                subject_tag = "unknown"
+                for s_id in valid_subjects:
+                    if filename.startswith(s_id):
+                        subject_tag = s_id
+                        break
 
+                reader = pypdf.PdfReader(os.path.join(books_dir, filename))
                 for i, page in enumerate(reader.pages):
                     text = page.extract_text()
                     if text and len(text.strip()) > 100:
@@ -50,10 +58,10 @@ def load_library():
                             "meta": f"{filename}, стр. {i+1}",
                             "subject": subject_tag
                         })
-                print(f"Загружен: {filename} (Категория: {subject_tag})")
+                print(f"Загружен: {filename} -> Категория: {subject_tag}")
             except Exception as e:
                 print(f"Ошибка в файле {filename}: {e}")
-    print(f"--- Всего блоков в памяти: {len(library_chunks)} ---")
+    print(f"--- Загрузка завершена. Всего блоков: {len(library_chunks)} ---")
 
 load_library()
 
