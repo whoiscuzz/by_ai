@@ -10,36 +10,46 @@ function App() {
         if (!task) return alert('Сначала введи задание!')
 
         setLoading(true)
-        // Это заглушка, пока мы не подключили Python-сервер
-        setTimeout(() => {
-            setResult('ИИ проанализировал учебники РБ и скоро здесь будет решение для задания: ' + task)
+        setResult('')
+
+        try {
+            const formData = new FormData()
+            formData.append('task', task)
+
+            const response = await fetch('http://127.0.0.1:8000/solve', {
+                method: 'POST',
+                body: formData,
+            })
+
+            if (!response.ok) {
+                throw new Error(`Ошибка сервера: ${response.status}`)
+            }
+
+            const data = await response.json()
+            setResult(data.result)
+        } catch (error) {
+            console.error(error)
+            setResult('ОШИБКА СВЯЗИ: ' + error.message + '. Убедись, что Python-сервер запущен!')
+        } finally {
             setLoading(false)
-        }, 1500)
+        }
     }
 
     return (
         <div className="container">
             <h1>BY AI: Помощник по учебе</h1>
-            <p className="subtitle">Анализ заданий на основе учебников РБ</p>
-
             <div className="card">
-                <h3>Задание или Бланк</h3>
-                <textarea
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    placeholder="Вставь текст задания или опиши, что нужно заполнить в бланке..."
-                />
-
-                <div className="button-group">
-                    <button onClick={handleSolve} disabled={loading}>
-                        {loading ? 'Связываюсь с базой учебников...' : 'Решить по программе РБ'}
-                    </button>
-                </div>
+        <textarea
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            placeholder="Введи задание..."
+        />
+                <button onClick={handleSolve} disabled={loading}>
+                    {loading ? 'Загрузка...' : 'Проверить связь с сервером'}
+                </button>
             </div>
-
             {result && (
                 <div className="result-card">
-                    <h3>Результат:</h3>
                     <p>{result}</p>
                 </div>
             )}
