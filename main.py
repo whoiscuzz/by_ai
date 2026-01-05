@@ -51,18 +51,18 @@ async def solve(request: Request):
     try:
         print("--- Запрос к Perplexity... ---")
         response = client.chat.completions.create(
-            model="llama-3.1-sonar-small-128k-online",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"Ты — эксперт по школьной программе РБ. Используй текст учебника: {context}"
-                },
-                {
-                    "role": "user",
-                    "content": task_text
-                }
-            ]
-        )
+                    model="sonar", # Обновленное название модели
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"Ты — эксперт по школьной программе РБ. Используй текст учебника: {context}"
+                        },
+                        {
+                            "role": "user",
+                            "content": task_text
+                        }
+                    ]
+                )
         ai_answer = response.choices[0].message.content
         print("--- Ответ от ИИ получен успешно! ---")
         return {"result": ai_answer}
