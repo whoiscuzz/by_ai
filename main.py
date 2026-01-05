@@ -1,9 +1,11 @@
 import os
+import pypdf
 from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import pypdf
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
@@ -21,53 +23,88 @@ client = OpenAI(
     base_url="https://api.perplexity.ai"
 )
 
-def get_text_from_pdf():
-    if not os.path.exists("./books"):
-        os.makedirs("./books")
-        return "Папка books была пуста, я её создал."
+library_chunks = []
 
-    pdf_files = [f for f in os.listdir("./books") if f.endswith(".pdf")]
-    if not pdf_files:
-        return "В папке books нет PDF файлов."
+def load_library():
+    global library_chunks
+    library_chunks = []
+    books_dir = "./books"
 
-    try:
-        reader = pypdf.PdfReader(os.path.join("./books", pdf_files[0]))
-        text = ""
-        for i in range(min(3, len(reader.pages))):
-            text += reader.pages[i].extract_text()
-        return text[:3000]
-    except Exception as e:
-        return f"Ошибка чтения PDF: {e}"
+    if not os.path.exists(books_dir):
+        os.makedirs(books_dir)
+        return
+
+    print("--- Загрузка учебников по категориям... ---")
+    for filename in os.listdir(books_dir):
+        if filename.endswith(".pdf"):
+            try:
+                # Определяем предмет по началу имени файла (например, "algebra_8.pdf" -> "algebra")
+                subject_tag = filename.split('_')[0].lower()
+                reader = pypdf.PdfReader(os.path.join(books_dir, filename))
+
+                for i, page in enumerate(reader.pages):
+                    text = page.extract_text()
+                    if text and len(text.strip()) > 100:
+                        library_chunks.append({
+                            "text": text,
+                            "meta": f"{filename}, стр. {i+1}",
+                            "subject": subject_tag
+                        })
+                print(f"Загружен: {filename} (Категория: {subject_tag})")
+            except Exception as e:
+                print(f"Ошибка в файле {filename}: {e}")
+    print(f"--- Всего блоков в памяти: {len(library_chunks)} ---")
+
+load_library()
+
+def find_info_in_subject(query, subject):
+    # Фильтруем данные: берем только те, что относятся к выбранному предмету
+    target_data = [c for c in library_chunks if c['subject'] == subject]
+
+    if not target_data:
+        return f"Учебник по предмету '{subject}' не найден."
+
+    texts = [item["text"] for item in target_data]
+    vectorizer = TfidfVectorizer()
+    tfidf_matrix = vectorizer.fit_transform(texts + [query])
+    cosine_sim = cosine_similarity(tfidf_matrix[-1:], tfidf_matrix[:-1])
+
+    top_indices = cosine_sim[0].argsort()[-3:][::-1]
+    context = ""
+    for idx in top_indices:
+        if cosine_sim[0][idx] > 0.05:
+            context += f"\n[Источник: {target_data[idx]['meta']}]\n{target_data[idx]['text']}\n"
+
+    return context if context else "Совпадений в учебнике не найдено."
 
 @app.post("/solve")
 async def solve(request: Request):
     form_data = await request.form()
     task_text = form_data.get("task", "")
-    print(f"--- Получено задание: {task_text} ---")
+    selected_subject = form_data.get("subject", "algebra")
 
-    context = get_text_from_pdf()
-    print("--- Контекст из учебника извлечен ---")
+    print(f"--- Работаем с предметом: {selected_subject} ---")
+    context = find_info_in_subject(task_text, selected_subject)
 
     try:
-        print("--- Запрос к Perplexity... ---")
         response = client.chat.completions.create(
-                    model="sonar", # Обновленное название модели
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": f"Ты — эксперт по школьной программе РБ. Используй текст учебника: {context}"
-                        },
-                        {
-                            "role": "user",
-                            "content": task_text
-                        }
-                    ]
-                )
-        ai_answer = response.choices[0].message.content
-        print("--- Ответ от ИИ получен успешно! ---")
-        return {"result": ai_answer}
+            model="sonar",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""Ты — ИИ-помощник по образованию в РБ.
+                    Твоя цель: решить задачу по предмету {selected_subject}, используя предоставленный текст учебника.
+                    КОНТЕКСТ: {context}
+
+                    ОФОРМЛЕНИЕ: Если это задача, пиши 'Дано', 'Решение', 'Ответ'.
+                    Если это вопрос, отвечай четко по учебнику.
+                    Если в учебнике нет инфы, реши сам, но предупреди об этом."""
+                },
+                {"role": "user", "content": task_text}
+            ]
+        )
+        return {"result": response.choices[0].message.content}
     except Exception as e:
-        print(f"!!! ОШИБКА API: {e}")
         return {"result": f"Ошибка нейросети: {str(e)}"}
 
 if __name__ == "__main__":
