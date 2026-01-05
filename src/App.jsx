@@ -16,7 +16,7 @@ function App() {
             const formData = new FormData()
             formData.append('task', task)
 
-            const response = await fetch('http://127.0.0.1:8000/solve', {
+            const response = await fetch('http://127.0.0.1:8080/solve', {
                 method: 'POST',
                 body: formData,
             })
