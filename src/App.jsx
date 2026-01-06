@@ -43,7 +43,7 @@ function App() {
 
     return (
         <div className="min-h-screen">
-            {/* Фоновое свечение в стиле Aceternity */}
+            {}
             <div className="glow-overlay"></div>
 
             <main className="container">
@@ -74,7 +74,7 @@ function App() {
                         </div>
                     </div>
 
-                    {/* Поле ввода */}
+                    {}
                     <div className="input-area">
                         <div className="input-wrapper">
                             <textarea
