@@ -58,7 +58,7 @@ function App() {
                 </motion.div>
 
                 <div className="main-grid">
-                    {/* Боковая панель выбора предметов */}
+                    {}
                     <div className="sidebar">
                         <h3>Предметы</h3>
                         <div className="subject-list">
